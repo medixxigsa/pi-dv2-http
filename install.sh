@@ -30,12 +30,20 @@ if [ ! -f /etc/$NAME/config.ini ]; then
     install -m 640 config.example.ini /etc/$NAME/config.ini
     echo ">> Edita /etc/$NAME/config.ini antes de arrancar el servicio"
 fi
-chown root:$SVC_USER /etc/$NAME/config.ini
+# Permisos: la carpeta y el config.ini deben poder leerse por el usuario del servicio
+chown root:$SVC_USER /etc/$NAME /etc/$NAME/config.ini
+chmod 750 /etc/$NAME
 chmod 640 /etc/$NAME/config.ini
 
 install -m 644 $NAME.service /etc/systemd/system/$NAME.service
 systemctl daemon-reload
+# Comprobar que el usuario del servicio puede leer la configuración
+if ! runuser -u $SVC_USER -- test -r /etc/$NAME/config.ini; then
+    echo "!! ATENCIÓN: $SVC_USER no puede leer /etc/$NAME/config.ini"
+    ls -ld /etc/$NAME /etc/$NAME/config.ini
+fi
 systemctl enable systemd-time-wait-sync.service 2>/dev/null || true
 systemctl enable $NAME
+if systemctl is-active --quiet $NAME; then systemctl restart $NAME; fi
 echo ">> Listo. Prueba:  sudo -u $SVC_USER python3 /opt/$NAME/medixxi_pi_dv2_http.py -c /etc/$NAME/config.ini --once --dry-run"
 echo ">> Arranca:        sudo systemctl start $NAME && journalctl -u $NAME -f"

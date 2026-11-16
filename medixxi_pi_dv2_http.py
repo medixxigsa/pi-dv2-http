@@ -413,14 +413,51 @@ class ConfigError(Exception):
     pass
 
 
+def _access_report(path: str) -> str:
+    """Explica quién es el dueño del fichero y con qué usuario/grupos se ejecuta el proceso."""
+    import grp
+    import pwd
+    import stat
+
+    def uname(uid):
+        try:
+            return pwd.getpwuid(uid).pw_name
+        except KeyError:
+            return str(uid)
+
+    def gname(gid):
+        try:
+            return grp.getgrgid(gid).gr_name
+        except KeyError:
+            return str(gid)
+
+    parts = []
+    for p in (os.path.dirname(path) or ".", path):
+        try:
+            st = os.stat(p)
+            parts.append(f"{p}: {uname(st.st_uid)}:{gname(st.st_gid)} {stat.filemode(st.st_mode)}")
+        except OSError as e:
+            parts.append(f"{p}: {e.strerror}")
+    groups = ",".join(sorted({gname(g) for g in os.getgroups()} | {gname(os.getgid())}))
+    parts.append(f"proceso: usuario={uname(os.getuid())} grupos={groups}")
+    return " | ".join(parts)
+
+
 class Settings:
     """Lee y valida config.ini (secciones [estacion], [consola], [destino], [cabeceras])."""
 
     def __init__(self, path: str, need_url: bool = True):
         cfg = configparser.ConfigParser()
         cfg.optionxform = str  # respetar mayúsculas en [cabeceras]
-        if not cfg.read(path, encoding="utf-8"):
-            raise ConfigError(f"No se pudo leer el fichero de configuración {path}")
+        try:
+            with open(path, encoding="utf-8") as f:
+                cfg.read_file(f, source=path)
+        except FileNotFoundError:
+            raise ConfigError(f"No existe el fichero de configuración {path}")
+        except PermissionError:
+            raise ConfigError(f"Sin permiso para leer {path}. {_access_report(path)}")
+        except configparser.Error as e:
+            raise ConfigError(f"Formato incorrecto en {path}: {e}")
         self.path = path
 
         def get(sec, key, default=""):

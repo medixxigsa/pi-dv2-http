@@ -7,7 +7,8 @@ Wants=network-online.target time-sync.target
 [Service]
 Type=simple
 User=medixxi
-Group=dialout
+Group=medixxi
+SupplementaryGroups=dialout
 ExecStart=/usr/bin/python3 /opt/medixxi-pi-dv2-http/medixxi_pi_dv2_http.py -c /etc/medixxi-pi-dv2-http/config.ini
 Restart=always
 RestartSec=10
